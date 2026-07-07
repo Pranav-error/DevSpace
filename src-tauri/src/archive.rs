@@ -141,7 +141,15 @@ pub fn convert(path: &str, mode: &str) -> Result<ArchiveOutcome, String> {
     let helper = helper_dir.join("convert.py");
     fs::write(&helper, CONVERT_PY).map_err(|e| e.to_string())?;
 
-    let out = Command::new("python3")
+    // Prefer DevSpace's private venv (~/.devspace/venv) so torch doesn't
+    // have to pollute the system python (Homebrew blocks that via PEP 668).
+    let venv_python = devspace_dir().join("venv/bin/python");
+    let python = if venv_python.exists() {
+        venv_python
+    } else {
+        std::path::PathBuf::from("python3")
+    };
+    let out = Command::new(python)
         .arg(&helper)
         .arg(path)
         .arg(mode)
