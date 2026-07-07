@@ -281,12 +281,18 @@ html, body {
   resize: none;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  min-width: 0;
 }
 .field input:focus, .field textarea:focus {
   border-color: var(--blue);
   background: rgba(255, 255, 255, 0.09);
 }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.field-grid .field { min-width: 0; }
+/* Numeric steppers waste width and look non-native in a dark popover. */
+.field input[type="number"]::-webkit-inner-spin-button,
+.field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* macOS-style switch */
 .field.check { flex-direction: row; align-items: center; gap: 8px; padding: 2px 0; }
