@@ -18,6 +18,7 @@
         <span id="tab-indicator"></span>
         <button class="tab active" data-tab="monitor">Monitor</button>
         <button class="tab" data-tab="disk">Disk</button>
+        <button class="tab" data-tab="models">ML</button>
         <button class="tab" data-tab="docker">Docker</button>
         <button class="tab" data-tab="settings">Settings</button>
       </nav>
@@ -60,6 +61,17 @@
         </div>
         <div class="row sticky-actions" id="clean-actions" hidden>
           <button class="btn danger" id="clean-btn">Move 0 items to Trash</button>
+        </div>
+      </section>
+
+      <!-- ============ ML MODELS ============ -->
+      <section class="tab-pane" id="pane-models">
+        <div class="row">
+          <button class="btn primary" id="models-scan">Scan</button>
+          <span class="hint" id="models-status"></span>
+        </div>
+        <div id="models-list" class="scroll">
+          <div class="hint">Your ML checkpoints (.pt, .ckpt, .safetensors, .gguf, …), grouped by project. They can never be deleted from here — only archived: move to an external drive with a symlink back, or compress with FP16/INT8.</div>
         </div>
       </section>
 

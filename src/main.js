@@ -236,6 +236,7 @@ listen("scan-progress", (event) => {
   const p = event.payload;
   const short = p.path.split("/").slice(-2).join("/");
   $("scan-status").textContent = `scanning… ${short}`;
+  $("models-status").textContent = "scanning…";
 });
 
 listen("scan-done", (event) => {
@@ -244,7 +245,60 @@ listen("scan-done", (event) => {
   $("scan-btn").disabled = false;
   $("scan-status").textContent = `${lastScan.findings.length} findings`;
   renderScan();
+  renderModels();
 });
+
+// ---------- ML models tab ----------
+$("models-scan").addEventListener("click", () => $("scan-btn").click());
+
+function renderModels() {
+  const box = $("models-list");
+  if (!lastScan) return;
+  const checkpoints = lastScan.findings.filter(
+    (f) => f.bucket === "precious" && f.kind === "checkpoint"
+  );
+  box.replaceChildren();
+  const totalB = checkpoints.reduce((a, f) => a + f.size_bytes, 0);
+  $("models-status").textContent = checkpoints.length
+    ? `${checkpoints.length} checkpoint${checkpoints.length === 1 ? "" : "s"} · ${fmt(totalB)}`
+    : "";
+  if (!checkpoints.length) {
+    box.append(
+      textDiv("No checkpoints found. Run a scan — .pt, .pth, .ckpt, .safetensors, .gguf, .h5, .onnx and large .bin files show up here, grouped by project.", "hint")
+    );
+    resizeForTab();
+    return;
+  }
+
+  // Group by project folder, biggest group first.
+  const groups = new Map();
+  for (const f of checkpoints) {
+    const key = f.project ?? f.path.split("/").slice(0, -1).join("/");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const sorted = [...groups.entries()]
+    .map(([root, items]) => ({
+      root,
+      name: root.split("/").pop(),
+      items: items.sort((a, b) => b.size_bytes - a.size_bytes),
+      total: items.reduce((a, f) => a + f.size_bytes, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  for (const g of sorted) {
+    box.append(textDiv(`${g.name} · ${g.items.length} file${g.items.length === 1 ? "" : "s"} · ${fmt(g.total)}`, "group-title precious"));
+    g.items.forEach((f, i) => {
+      const row = findingRow(f, false);
+      if (i < 12) {
+        row.classList.add("pop");
+        row.style.animationDelay = `${i * 22}ms`;
+      }
+      box.append(row);
+    });
+  }
+  resizeForTab();
+}
 
 listen("scan-error", (event) => {
   $("scan-btn").disabled = false;
@@ -484,6 +538,7 @@ async function archiveFlow(f) {
       toast(`${res.message}: ${fmt(res.before_bytes)} → ${fmt(res.after_bytes)}`, 6000);
       f.size_bytes = res.after_bytes;
       renderScan();
+      renderModels();
     }
   } catch (e) {
     toast(String(e), 6000);
