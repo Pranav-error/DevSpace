@@ -113,6 +113,10 @@ html, body {
   z-index: 1;
 }
 .tab:active { transform: scale(0.95); }
+/* Kill WebKit's blue focus ring on mouse clicks; keep a subtle one for
+   keyboard navigation only. */
+.tab:focus, .btn:focus { outline: none; }
+.tab:focus-visible, .btn:focus-visible { outline: 2px solid rgba(10, 132, 255, 0.6); outline-offset: 1px; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--text); font-weight: 590; }
 
