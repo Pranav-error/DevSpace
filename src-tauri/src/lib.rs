@@ -73,6 +73,26 @@ fn app_name_from_path(path: &std::path::Path) -> Option<String> {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::app_name_from_path;
+    use std::path::Path;
+
+    #[test]
+    fn groups_helpers_under_app_bundle() {
+        assert_eq!(
+            app_name_from_path(Path::new(
+                "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Renderer).app/Contents/MacOS/Code Helper (Renderer)"
+            )),
+            Some("Visual Studio Code".into())
+        );
+        assert_eq!(
+            app_name_from_path(Path::new("/usr/local/bin/node")),
+            None
+        );
+    }
+}
+
 #[derive(Clone, serde::Serialize)]
 struct Stats {
     memory_used_bytes: u64,

@@ -154,3 +154,18 @@ pub fn remove(kind: &str, id: &str) -> Result<String, String> {
         _ => Err(format!("unknown kind {kind}")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_size;
+
+    #[test]
+    fn parses_docker_size_strings() {
+        assert_eq!(parse_size("1.5GB"), 1_500_000_000);
+        assert_eq!(parse_size("456MB"), 456_000_000);
+        assert_eq!(parse_size("789kB"), 789_000);
+        assert_eq!(parse_size("120B"), 120);
+        assert_eq!(parse_size("0B"), 0);
+        assert_eq!(parse_size("garbage"), 0);
+    }
+}

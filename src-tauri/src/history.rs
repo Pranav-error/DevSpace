@@ -137,3 +137,78 @@ impl Db {
         Forecast { days_left, samples: points.len(), trend_gb_per_day: slope }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GB: u64 = 1024 * 1024 * 1024;
+
+    fn test_db() -> Db {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE disk_history (ts INTEGER NOT NULL, free_bytes INTEGER NOT NULL);
+             CREATE TABLE cleaned (ts INTEGER NOT NULL, path TEXT NOT NULL, size_bytes INTEGER NOT NULL);",
+        )
+        .unwrap();
+        Db(Mutex::new(conn))
+    }
+
+    #[test]
+    fn forecast_needs_enough_samples() {
+        let db = test_db();
+        let fc = db.forecast(50 * GB, 10.0);
+        assert!(fc.days_left.is_none());
+        assert!(fc.samples < 24);
+    }
+
+    #[test]
+    fn forecast_detects_decline() {
+        let db = test_db();
+        // 29 daily samples falling 2 GB/day: 98 GB → 42 GB.
+        {
+            let conn = db.0.lock().unwrap();
+            for i in 0..29u64 {
+                let ts = now() - (29 - i) * 86_400;
+                let free = (98 - 2 * i) * GB;
+                conn.execute(
+                    "INSERT INTO disk_history (ts, free_bytes) VALUES (?1, ?2)",
+                    (ts, free),
+                )
+                .unwrap();
+            }
+        }
+        let fc = db.forecast(40 * GB, 10.0);
+        assert!(fc.trend_gb_per_day < -1.0, "slope {}", fc.trend_gb_per_day);
+        let days = fc.days_left.expect("should forecast a deadline");
+        // (40 - 10) GB at ~2 GB/day ≈ 15 days.
+        assert!((10.0..20.0).contains(&days), "days_left {days}");
+    }
+
+    #[test]
+    fn forecast_stable_disk_has_no_deadline() {
+        let db = test_db();
+        {
+            let conn = db.0.lock().unwrap();
+            for i in 0..29u64 {
+                let ts = now() - (29 - i) * 86_400;
+                conn.execute(
+                    "INSERT INTO disk_history (ts, free_bytes) VALUES (?1, ?2)",
+                    (ts, 50 * GB),
+                )
+                .unwrap();
+            }
+        }
+        let fc = db.forecast(50 * GB, 10.0);
+        assert!(fc.days_left.is_none());
+    }
+
+    #[test]
+    fn cleaned_log_and_total() {
+        let db = test_db();
+        db.log_cleaned("/tmp/a", 1000);
+        db.log_cleaned("/tmp/b", 500);
+        assert_eq!(db.total_saved(), 1500);
+        assert_eq!(db.recently_cleaned().len(), 2);
+    }
+}

@@ -343,3 +343,98 @@ pub fn scan<F: FnMut(&str, usize)>(cfg: &Config, mut progress: F) -> ScanResult 
         scanned_at: now_secs(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn write(p: &Path, bytes: usize) {
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, vec![0u8; bytes]).unwrap();
+    }
+
+    fn fixture(label: &str) -> (PathBuf, ScanResult) {
+        let root = std::env::temp_dir().join(format!("devspace-scan-test-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let proj = root.join("myproj");
+        write(&proj.join("node_modules/pkg/index.js"), 2 * 1024 * 1024);
+        write(&proj.join(".venv/pyvenv.cfg"), 10);
+        write(&proj.join(".venv/lib/dep.bin"), 2 * 1024 * 1024);
+        write(&proj.join("model.safetensors"), 11 * 1024 * 1024);
+        write(&proj.join(".env"), 100);
+        write(&proj.join("package.json"), 10);
+        write(&proj.join("src/main.js"), 500);
+        // Inside .git must be pruned entirely.
+        write(&proj.join(".git/objects/huge.pack"), 12 * 1024 * 1024);
+        let cfg = Config {
+            scan_roots: vec![root.to_string_lossy().into_owned()],
+            ignore_patterns: vec![],
+            ..Default::default()
+        };
+        let res = scan(&cfg, |_, _| {});
+        (root, res)
+    }
+
+    #[test]
+    fn classifier_buckets_are_correct() {
+        let (root, res) = fixture("buckets");
+        let in_fixture: Vec<&Finding> = res
+            .findings
+            .iter()
+            .filter(|f| f.path.starts_with(root.to_string_lossy().as_ref()))
+            .collect();
+
+        let find = |k: &str| {
+            in_fixture
+                .iter()
+                .find(|f| f.kind == k)
+                .unwrap_or_else(|| panic!("missing finding kind {k}"))
+        };
+        assert!(matches!(find("node_modules").bucket, Bucket::RegenLow));
+        assert!(matches!(find(".venv").bucket, Bucket::RegenMedium));
+        assert!(matches!(find("checkpoint").bucket, Bucket::Precious));
+        assert!(matches!(find("env file").bucket, Bucket::Precious));
+        // .git contents must never be reported.
+        assert!(!in_fixture.iter().any(|f| f.path.contains("/.git/")));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn project_metadata_detected() {
+        let (root, res) = fixture("meta");
+        let p = res
+            .projects
+            .iter()
+            .find(|p| p.name == "myproj")
+            .expect("project missing");
+        assert_eq!(p.rebuild_cmd.as_deref(), Some("npm install"));
+        // node_modules counts toward hibernation-reclaimable bytes.
+        assert!(p.regen_low_bytes >= 2 * 1024 * 1024);
+        assert!(!p.hibernated);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn venv_without_spec_is_flagged_risky() {
+        let (root, res) = fixture("risk");
+        let venv = res
+            .findings
+            .iter()
+            .find(|f| f.kind == ".venv" && f.path.starts_with(root.to_string_lossy().as_ref()))
+            .unwrap();
+        // package.json is not a python env spec → risky.
+        assert!(venv.rebuild_risk);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn dir_size_sums_files() {
+        let root = std::env::temp_dir().join(format!("devspace-size-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        write(&root.join("a/b.bin"), 1000);
+        write(&root.join("c.bin"), 500);
+        assert_eq!(dir_size(&root), 1500);
+        let _ = fs::remove_dir_all(&root);
+    }
+}
