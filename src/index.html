@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevSpace</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js" defer></script>
+  </head>
+  <body>
+    <div class="panel">
+      <header class="panel-header">
+        <span class="app-title">DevSpace</span>
+        <span id="status-dot"></span>
+      </header>
+
+      <nav class="tabs">
+        <span id="tab-indicator"></span>
+        <button class="tab active" data-tab="monitor">Monitor</button>
+        <button class="tab" data-tab="disk">Disk</button>
+        <button class="tab" data-tab="docker">Docker</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </nav>
+
+      <!-- ============ MONITOR ============ -->
+      <section class="tab-pane active" id="pane-monitor">
+        <div class="section">
+          <div class="row">
+            <span class="label">Memory</span>
+            <span class="value" id="mem-text">— / —</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="mem-bar" style="width:0%"></div></div>
+          <div class="hint warn-text" id="mem-warning"></div>
+        </div>
+        <div class="divider"></div>
+        <div class="section">
+          <div class="row"><span class="label">Top processes</span></div>
+          <ul class="proc-list" id="proc-list"><li class="placeholder">waiting for data…</li></ul>
+        </div>
+        <div class="divider"></div>
+        <div class="section">
+          <div class="row">
+            <span class="label">Disk free</span>
+            <span class="value" id="disk-text">—</span>
+          </div>
+          <div class="bar"><div class="bar-fill disk" id="disk-bar" style="width:0%"></div></div>
+          <div class="hint" id="forecast-text"></div>
+        </div>
+        <div class="footer" id="total-saved"></div>
+      </section>
+
+      <!-- ============ DISK ============ -->
+      <section class="tab-pane" id="pane-disk">
+        <div class="row">
+          <button class="btn primary" id="scan-btn">Scan</button>
+          <span class="hint" id="scan-status"></span>
+        </div>
+        <div id="scan-results" class="scroll">
+          <div class="hint">No scan yet. Scan walks your configured roots and classifies what it finds — nothing is ever deleted without your confirmation, and deletions go to the Trash.</div>
+        </div>
+        <div class="row sticky-actions" id="clean-actions" hidden>
+          <button class="btn danger" id="clean-btn">Move 0 items to Trash</button>
+        </div>
+      </section>
+
+      <!-- ============ DOCKER ============ -->
+      <section class="tab-pane" id="pane-docker">
+        <div class="row">
+          <button class="btn primary" id="docker-refresh">Refresh</button>
+          <span class="hint" id="docker-status"></span>
+        </div>
+        <div id="docker-results" class="scroll"></div>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="tab-pane" id="pane-settings">
+        <div class="scroll">
+          <label class="field">Scan roots (one per line)
+            <textarea id="cfg-roots" rows="3"></textarea>
+          </label>
+          <label class="field">Ignore patterns (globs, one per line)
+            <textarea id="cfg-ignore" rows="2"></textarea>
+          </label>
+          <label class="field">Never-touch paths (one per line)
+            <textarea id="cfg-never" rows="2"></textarea>
+          </label>
+          <div class="field-grid">
+            <label class="field">Poll interval (s)<input type="number" id="cfg-poll" min="1" /></label>
+            <label class="field">RAM warn %<input type="number" id="cfg-mem" min="50" max="99" /></label>
+            <label class="field">Disk warn GB<input type="number" id="cfg-disk" min="1" /></label>
+            <label class="field">Hibernate after (days)<input type="number" id="cfg-hib" min="7" /></label>
+          </div>
+          <label class="field check"><input type="checkbox" id="cfg-traytext" /> Live text in menu bar</label>
+          <button class="btn primary" id="cfg-save">Save settings</button>
+          <div class="hint">Stored at ~/.devspace/config.json</div>
+        </div>
+      </section>
+
+      <div id="toast" hidden></div>
+
+      <!-- confirm modal -->
+      <div id="modal" hidden>
+        <div class="modal-box">
+          <div class="modal-title" id="modal-title"></div>
+          <div class="modal-body scroll" id="modal-body"></div>
+          <div class="row modal-actions">
+            <button class="btn" id="modal-cancel">Cancel</button>
+            <button class="btn danger" id="modal-confirm">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
