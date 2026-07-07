@@ -134,10 +134,15 @@ These hold for every feature, forever:
 - [x] Unit tests + beta test script
 - [ ] Notarized releases (Developer ID) + Homebrew cask
 - [ ] Pure-Rust checkpoint conversion via [candle](https://github.com/huggingface/candle) — drop the Python dependency
+- [ ] **App Store edition** — sandboxed variant using user-granted folder access (DaisyDisk-style): scanner, cleanup, ML tab with candle conversion; no Docker/app-quit
 - [ ] FSEvents-based hibernation auto-restore
 - [ ] Per-project growth forecasting
 
-**Distribution note:** the Mac App Store sandbox is incompatible with what this app does (full-disk scanning, Trash, Docker/python subprocesses). The plan is notarized direct distribution: GitHub Releases + `brew install --cask devspace`.
+**Distribution:** this full version ships as notarized direct downloads (GitHub Releases, later Homebrew). The Mac App Store sandbox can't accommodate everything here (Docker CLI, quitting apps, free-roaming scans), so the App Store edition above will be a reduced variant using security-scoped folder grants.
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) — especially the non-negotiable safety rules. Licensed under [MIT](LICENSE).
 
 ---
 
