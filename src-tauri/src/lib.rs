@@ -472,8 +472,10 @@ fn spawn_poll_loop(app: AppHandle) {
             // Live tray text.
             if let Some(trays) = app.try_state::<TrayHandles>() {
                 if let Some(tray) = trays.tray.lock().unwrap().as_ref() {
+                    // Compact — every point of width raises the odds macOS
+                    // hides the item on notched Macs when the bar is full.
                     let title = if live_text {
-                        Some(format!("{:.0}% · {:.0}G", mem_pct, free_gb))
+                        Some(format!("{:.0}%·{:.0}G", mem_pct, free_gb))
                     } else {
                         None
                     };
