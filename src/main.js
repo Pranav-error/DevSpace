@@ -118,8 +118,21 @@ const textDiv = (t, cls = "") => {
 };
 
 // ---------- monitor tab ----------
-listen("stats", (event) => {
-  const s = event.payload;
+// Click the memory section to expand from top 5 to the full breakdown.
+let memExpanded = false;
+let lastStats = null;
+$("mem-section").addEventListener("click", () => {
+  memExpanded = !memExpanded;
+  $("mem-chevron").classList.toggle("open", memExpanded);
+  $("proc-list").classList.toggle("expanded", memExpanded);
+  if (lastStats) renderStats(lastStats);
+  resizeForTab();
+});
+
+listen("stats", (event) => renderStats(event.payload));
+
+function renderStats(s) {
+  lastStats = s;
   $("status-dot").classList.add("live");
 
   const memPct = s.memory_total_bytes ? (s.memory_used_bytes / s.memory_total_bytes) * 100 : 0;
@@ -136,12 +149,44 @@ listen("stats", (event) => {
     : "";
 
   $("proc-list").replaceChildren(
-    ...s.top_processes.map((p) => {
+    ...s.top_processes.slice(0, memExpanded ? 20 : 5).map((p) => {
       const li = document.createElement("li");
       li.className = "proc-row";
-      const name = textDiv(p.name, "proc-name");
-      const mem = textDiv(fmt(p.memory_bytes), "proc-mem");
-      li.append(name, mem);
+      const info = document.createElement("div");
+      info.className = "proc-info";
+      info.append(textDiv(p.name, "proc-name"));
+      const sub = [];
+      if (p.process_count > 1) sub.push(`${p.process_count} processes`);
+      if (!p.is_app) {
+        sub.push("CLI/background");
+        li.title = "Not an app — could be a live terminal session. Quit it from wherever it runs.";
+      }
+      if (sub.length) info.append(textDiv(sub.join(" · "), "proc-sub"));
+      const ramPct = s.memory_total_bytes
+        ? ((p.memory_bytes / s.memory_total_bytes) * 100).toFixed(0)
+        : 0;
+      const mem = textDiv(`${fmt(p.memory_bytes)} · ${ramPct}%`, "proc-mem");
+      li.append(info, mem);
+      if (p.is_app) {
+        const quit = document.createElement("button");
+        quit.className = "btn mini quit";
+        quit.textContent = "Quit";
+        quit.addEventListener("click", async () => {
+          const ok = await confirmModal(
+            `Quit ${p.name}?`,
+            [textDiv(`Asks ${p.name} to quit like ⌘Q — you can save unsaved work first. Frees ~${fmt(p.memory_bytes)}.`)],
+            "Quit app"
+          );
+          if (!ok) return;
+          try {
+            await invoke("quit_app", { name: p.name, pids: p.pids });
+            toast(`Asked ${p.name} to quit`);
+          } catch (e) {
+            toast(String(e), 5000);
+          }
+        });
+        li.append(quit);
+      }
       return li;
     })
   );
@@ -155,7 +200,7 @@ listen("stats", (event) => {
   if (s.total_saved_bytes > 0) {
     $("total-saved").textContent = `Total saved with DevSpace: ${fmt(s.total_saved_bytes)}`;
   }
-});
+}
 
 async function refreshForecast() {
   try {

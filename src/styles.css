@@ -123,6 +123,13 @@ html, body {
 .section { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .label { font-size: 11px; font-weight: 590; color: var(--text-2); }
+.clickable { cursor: pointer; border-radius: 7px; margin: -3px -5px; padding: 3px 5px; transition: background 0.12s; }
+.clickable:hover { background: var(--fill); }
+#mem-chevron {
+  display: inline-block; color: var(--text-3); font-weight: 700;
+  transition: transform 0.35s var(--spring);
+}
+#mem-chevron.open { transform: rotate(90deg); }
 .value { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .hint { font-size: 11px; color: var(--text-3); line-height: 1.45; }
 .warn-text { color: var(--yellow); font-weight: 600; }
@@ -142,13 +149,24 @@ html, body {
 
 /* processes */
 .proc-list { list-style: none; display: flex; flex-direction: column; }
+.proc-list.expanded {
+  max-height: 292px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.proc-list.expanded::-webkit-scrollbar { width: 5px; }
+.proc-list.expanded::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 3px; }
 .proc-row {
   display: flex; justify-content: space-between; align-items: center;
   font-size: 12.5px; padding: 3.5px 6px; border-radius: 6px;
 }
 .proc-row:hover { background: var(--fill); }
-.proc-row .proc-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+.proc-row .proc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.proc-row .proc-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proc-row .proc-sub { font-size: 10px; color: var(--text-3); }
 .proc-row .proc-mem { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 12px; }
+.proc-row .quit { opacity: 0; transition: opacity 0.15s, background 0.15s; margin-left: 4px; }
+.proc-row:hover .quit { opacity: 1; }
 .placeholder { color: var(--text-3); font-size: 12px; list-style: none; padding: 3px 6px; }
 
 /* buttons — small and quiet, like popover controls */

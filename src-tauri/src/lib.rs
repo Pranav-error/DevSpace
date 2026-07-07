@@ -54,8 +54,23 @@ struct TrayHandles {
 
 #[derive(Clone, serde::Serialize)]
 struct ProcStat {
+    /// App name (helpers grouped under their .app bundle) or process name.
     name: String,
     memory_bytes: u64,
+    process_count: u32,
+    pids: Vec<u32>,
+    /// True when the name comes from a .app bundle — only those get a
+    /// Quit button (graceful ⌘Q). CLI processes could be someone's live
+    /// terminal session; killing them blind is a footgun.
+    is_app: bool,
+}
+
+/// "/Applications/Visual Studio Code.app/.../Code Helper" → "Visual Studio Code"
+fn app_name_from_path(path: &std::path::Path) -> Option<String> {
+    path.components().find_map(|c| {
+        let s = c.as_os_str().to_string_lossy();
+        s.strip_suffix(".app").map(|name| name.to_string())
+    })
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -73,16 +88,31 @@ fn collect_stats(sys: &mut System) -> (Stats, f64) {
     sys.refresh_memory();
     sys.refresh_processes(ProcessesToUpdate::All, true);
 
-    let mut procs: Vec<ProcStat> = sys
-        .processes()
-        .values()
-        .map(|p| ProcStat {
-            name: p.name().to_string_lossy().into_owned(),
-            memory_bytes: p.memory(),
+    // Group helper processes under their parent app so the list reads
+    // "Visual Studio Code · 12 processes" instead of "Code Helper (Renderer)".
+    let mut by_app: std::collections::HashMap<(String, bool), (u64, Vec<u32>)> =
+        std::collections::HashMap::new();
+    for p in sys.processes().values() {
+        let app_name = p.exe().and_then(app_name_from_path);
+        let is_app = app_name.is_some();
+        let name = app_name.unwrap_or_else(|| p.name().to_string_lossy().into_owned());
+        let entry = by_app.entry((name, is_app)).or_default();
+        entry.0 += p.memory();
+        entry.1.push(p.pid().as_u32());
+    }
+    let mut procs: Vec<ProcStat> = by_app
+        .into_iter()
+        .map(|((name, is_app), (mem, pids))| ProcStat {
+            name,
+            memory_bytes: mem,
+            process_count: pids.len() as u32,
+            pids,
+            is_app,
         })
         .collect();
     procs.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes));
-    procs.truncate(5);
+    // Frontend shows 5 collapsed / 20 when the memory section is expanded.
+    procs.truncate(20);
 
     let disks = Disks::new_with_refreshed_list();
     let root = disks
@@ -236,6 +266,27 @@ fn toggle_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
 }
 
 // ---------- commands ----------
+
+/// Ask the app to quit gracefully (like ⌘Q); fall back to SIGTERM.
+#[tauri::command]
+fn quit_app(name: String, pids: Vec<u32>) -> Result<(), String> {
+    let script = format!("tell application \"{}\" to quit", name.replace('"', ""));
+    let graceful = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !graceful {
+        for pid in pids {
+            let _ = std::process::Command::new("kill")
+                .arg("-15")
+                .arg(pid.to_string())
+                .status();
+        }
+    }
+    Ok(())
+}
 
 #[tauri::command]
 fn resize_popover(app: AppHandle, height: f64) {
@@ -460,6 +511,7 @@ pub fn run() {
         .plugin(tauri_nspanel::init())
         .invoke_handler(tauri::generate_handler![
             resize_popover,
+            quit_app,
             get_config,
             save_config,
             set_paused,
