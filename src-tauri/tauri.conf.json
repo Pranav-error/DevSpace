@@ -8,7 +8,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "macOSPrivateApi": true,
+    "macOSPrivateApi": false,
     "windows": [
       {
         "label": "popover",
@@ -17,12 +17,8 @@
         "height": 384,
         "visible": false,
         "decorations": false,
-        "transparent": true,
-        "windowEffects": {
-          "effects": ["popover", "hudWindow"],
-          "state": "active",
-          "radius": 12
-        },
+        "transparent": false,
+        "backgroundColor": "#1c1c1e",
         "resizable": false,
         "alwaysOnTop": true,
         "visibleOnAllWorkspaces": true,
