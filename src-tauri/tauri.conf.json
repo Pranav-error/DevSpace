@@ -38,7 +38,7 @@
     "active": true,
     "targets": "all",
     "macOS": {
-      "signingIdentity": "Apple Development: Sai Pranav (Q9ZBXMYH68)"
+      "signingIdentity": "Developer ID Application: MYSTARTUPWAVE PRIVATE LIMITED (J73FA7VZPP)"
     },
     "icon": [
       "icons/32x32.png",
