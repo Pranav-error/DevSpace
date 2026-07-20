@@ -86,11 +86,12 @@ process killing, ML quantization, whole-home scanning) is *dropped* in this SKU.
 - **Phase 2 — Trash cleanup + notifications** inside the sandbox.
 - **Phase 3 — sandbox entitlements, Apple Distribution signing, first TestFlight/Review build.**
 
-## Open decisions (for you)
-1. **Separate bundle id** (`...devspace-lite`) so both editions coexist, vs reuse the same id? (Recommend separate.)
-2. **Give up floating-over-fullscreen** in Lite v1? (Recommend yes — the private-API path that
-   enabled it is the main rejection cause.)
-3. Ship Lite as **free** (it's a strict subset) or is the App Store purely for discoverability?
+## Decisions (resolved 2026-07-21)
+1. **Separate bundle id: `com.saipranav.devspace-lite`** — both editions can coexist on one Mac. ✅
+2. **Drop floating-over-fullscreen in Lite v1** — the private-API path that enabled it is the main
+   rejection cause; not worth the risk. ✅
+3. **Free** — Lite is a strict subset of the free open-source app; the App Store listing is purely
+   for discoverability + trust. ✅
 
 ## Why direct distribution stays primary
 For a power-user dev tool, the notarized GitHub/Homebrew build is the *better* channel: no
