@@ -40,8 +40,15 @@ use scanner::ScanResult;
 struct PopoverTimes {
     shown_at: Instant,
     hidden_at: Instant,
+    /// Last content-measured height, applied before the next show so the
+    /// window never appears at the wrong size and then jumps.
+    height: f64,
 }
 struct PopoverState(Mutex<PopoverTimes>);
+
+/// Initial height that fits the Monitor tab (with the RAM warning line) so the
+/// very first open isn't truncated before JS measures the real height.
+const DEFAULT_POPOVER_HEIGHT: f64 = 472.0;
 
 struct AppState {
     config: Mutex<Config>,
@@ -211,6 +218,61 @@ fn tray_icon_image() -> tauri::image::Image<'static> {
 
 // ---------- panel ----------
 
+// Round the popover's corners with public AppKit only: make the window
+// non-opaque with a clear backing (so the clipped corners reveal the desktop
+// and its shadow), then clip the content view's layer to a matching radius.
+// No private API — App Store-safe.
+#[cfg(target_os = "macos")]
+unsafe fn apply_round(view: *mut objc2::runtime::AnyObject, radius: f64) {
+    use objc2::{msg_send, runtime::AnyObject};
+    if view.is_null() {
+        return;
+    }
+    let view: &AnyObject = &*view;
+    let _: () = msg_send![view, setWantsLayer: true];
+    let layer: *mut AnyObject = msg_send![view, layer];
+    if layer.is_null() {
+        return;
+    }
+    let layer: &AnyObject = &*layer;
+    let _: () = msg_send![layer, setCornerRadius: radius];
+    let _: () = msg_send![layer, setMasksToBounds: true];
+}
+
+#[cfg(target_os = "macos")]
+fn round_corners(app: &AppHandle) {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    let Some(win) = app.get_webview_window("popover") else {
+        return;
+    };
+    let Ok(ptr) = win.ns_window() else { return };
+    const RADIUS: f64 = 14.0; // matches the CSS .panel border-radius
+    unsafe {
+        let ns_window: &AnyObject = &*(ptr as *mut AnyObject);
+        let _: () = msg_send![ns_window, setOpaque: false];
+        let clear: *mut AnyObject = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![ns_window, setBackgroundColor: clear];
+        let _: () = msg_send![ns_window, setHasShadow: true];
+
+        let content: *mut AnyObject = msg_send![ns_window, contentView];
+        if content.is_null() {
+            return;
+        }
+        apply_round(content, RADIUS);
+        // Tauri wraps the WKWebView in a container view, and WKWebView renders
+        // out-of-process so it ignores the container's mask — round its own
+        // layer (and any nested subviews) directly.
+        let subviews: *mut AnyObject = msg_send![&*content, subviews];
+        if !subviews.is_null() {
+            let count: usize = msg_send![&*subviews, count];
+            for i in 0..count {
+                let v: *mut AnyObject = msg_send![&*subviews, objectAtIndex: i];
+                apply_round(v, RADIUS);
+            }
+        }
+    }
+}
+
 fn init_panel(app: &AppHandle) {
     let win = app.get_webview_window("popover").unwrap();
     let panel = win.to_panel().unwrap();
@@ -243,12 +305,21 @@ fn init_panel(app: &AppHandle) {
         }
     }));
     panel.set_delegate(delegate);
+
+    #[cfg(target_os = "macos")]
+    round_corners(app);
 }
 
 fn show_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
     let Some(win) = app.get_webview_window("popover") else {
         return;
     };
+    // Size to the last measured height *before* showing so it never opens
+    // truncated and then jumps to fit.
+    if let Some(state) = app.try_state::<PopoverState>() {
+        let h = state.0.lock().unwrap().height;
+        let _ = win.set_size(tauri::LogicalSize::new(340.0, h));
+    }
     if let Some(rect) = tray_rect {
         let scale = win.scale_factor().unwrap_or(1.0);
         let pos = match rect.position {
@@ -270,6 +341,10 @@ fn show_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
     }
     if let Ok(panel) = app.get_webview_panel("popover") {
         panel.show();
+        // Re-apply now that the webview's layers definitely exist (the setup-time
+        // call can run before they're attached).
+        #[cfg(target_os = "macos")]
+        round_corners(app);
         // Let the frontend replay its entrance animation.
         let _ = app.emit("popover-shown", ());
     }
@@ -317,6 +392,10 @@ fn quit_app(name: String, pids: Vec<u32>) -> Result<(), String> {
 fn resize_popover(app: AppHandle, height: f64) {
     if let Some(win) = app.get_webview_window("popover") {
         let _ = win.set_size(tauri::LogicalSize::new(340.0, height));
+    }
+    // Remember it so the next open starts at this height instead of jumping.
+    if let Some(state) = app.try_state::<PopoverState>() {
+        state.0.lock().unwrap().height = height;
     }
 }
 
@@ -562,6 +641,7 @@ pub fn run() {
             app.manage(PopoverState(Mutex::new(PopoverTimes {
                 shown_at: boot,
                 hidden_at: boot,
+                height: DEFAULT_POPOVER_HEIGHT,
             })));
             app.manage(AppState {
                 config: Mutex::new(config::load()),

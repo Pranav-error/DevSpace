@@ -638,6 +638,7 @@ name = "devspace"
 version = "0.1.0"
 dependencies = [
  "globset",
+ "objc2",
  "rusqlite",
  "serde",
  "serde_json",

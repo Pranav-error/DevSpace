@@ -28,3 +28,6 @@ globset = "0.4"
 # over-fullscreen behavior WITHOUT the macos-private-api feature (which is the
 # real App Store blocker and stays off).
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
+# Public AppKit calls to round the opaque window's corners (setOpaque/
+# clearColor/CALayer cornerRadius) — App Store-safe.
+objc2 = "0.6"
