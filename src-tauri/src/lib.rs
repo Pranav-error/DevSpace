@@ -406,9 +406,25 @@ fn resize_popover(app: AppHandle, height: f64) {
 /// Non-blocking: a blocking picker wedges a menu-bar app's event loop (the
 /// popover stops responding and the app can't be quit). We open the panel with
 /// a callback and push the result back to the UI via a `folders-changed` event.
+/// Bring the app frontmost so panels (like the folder picker) actually appear.
+/// A menu-bar Accessory app isn't active by default, so an async NSOpenPanel
+/// opens with nothing to raise it. Public AppKit — App Store-safe.
+#[cfg(target_os = "macos")]
+fn activate_app() {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    unsafe {
+        let ns_app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        if !ns_app.is_null() {
+            let _: () = msg_send![&*ns_app, activateIgnoringOtherApps: true];
+        }
+    }
+}
+
 #[tauri::command]
 fn pick_scan_folder(app: AppHandle) {
     use tauri_plugin_dialog::DialogExt;
+    #[cfg(target_os = "macos")]
+    activate_app();
     let app = app.clone();
     app.clone().dialog().file().pick_folder(move |folder| {
         let Some(fp) = folder else { return };
