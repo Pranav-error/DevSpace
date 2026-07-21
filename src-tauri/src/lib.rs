@@ -48,7 +48,7 @@ struct PopoverState(Mutex<PopoverTimes>);
 
 /// Initial height that fits the Monitor tab (with the RAM warning line) so the
 /// very first open isn't truncated before JS measures the real height.
-const DEFAULT_POPOVER_HEIGHT: f64 = 472.0;
+const DEFAULT_POPOVER_HEIGHT: f64 = 500.0;
 
 struct AppState {
     config: Mutex<Config>,
@@ -402,21 +402,29 @@ fn resize_popover(app: AppHandle, height: f64) {
 /// App Store edition: let the user grant a folder to scan. The picked path
 /// becomes a scan root (persisted). Under the sandbox this is the only way in —
 /// the folder picker carries the user's access grant.
+///
+/// Non-blocking: a blocking picker wedges a menu-bar app's event loop (the
+/// popover stops responding and the app can't be quit). We open the panel with
+/// a callback and push the result back to the UI via a `folders-changed` event.
 #[tauri::command]
-fn pick_scan_folder(app: AppHandle, state: State<AppState>) -> Result<Vec<String>, String> {
+fn pick_scan_folder(app: AppHandle) {
     use tauri_plugin_dialog::DialogExt;
-    let picked = app.dialog().file().blocking_pick_folder();
-    if let Some(fp) = picked {
-        if let Ok(path) = fp.into_path() {
-            let path = path.to_string_lossy().into_owned();
+    let app = app.clone();
+    app.clone().dialog().file().pick_folder(move |folder| {
+        let Some(fp) = folder else { return };
+        let Ok(path) = fp.into_path() else { return };
+        let path = path.to_string_lossy().into_owned();
+        let roots = {
+            let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
             if !cfg.scan_roots.contains(&path) {
                 cfg.scan_roots.push(path);
                 let _ = config::save(&cfg);
             }
-        }
-    }
-    Ok(state.config.lock().unwrap().scan_roots.clone())
+            cfg.scan_roots.clone()
+        };
+        let _ = app.emit("folders-changed", roots);
+    });
 }
 
 #[tauri::command]

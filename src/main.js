@@ -201,7 +201,16 @@ function renderStats(s) {
   if (s.total_saved_bytes > 0) {
     $("total-saved").textContent = `Total saved with DevSpace: ${fmt(s.total_saved_bytes)}`;
   }
+
+  // The window may have been measured while the process list was still empty
+  // (stats arrive a beat after launch). Re-fit once it's populated so the
+  // Monitor tab never opens truncated.
+  if (!statsFitDone && s.top_processes.length) {
+    statsFitDone = true;
+    if (document.querySelector(".tab-pane.active")?.id === "pane-monitor") resizeForTab();
+  }
 }
+let statsFitDone = false;
 
 async function refreshForecast() {
   try {
@@ -259,13 +268,12 @@ async function loadFolders() {
   } catch {}
 }
 
-$("add-folder").addEventListener("click", async () => {
-  try {
-    renderFolders(await invoke("pick_scan_folder"));
-  } catch (e) {
-    toast(String(e));
-  }
+$("add-folder").addEventListener("click", () => {
+  // Non-blocking: backend opens the picker and emits `folders-changed`.
+  invoke("pick_scan_folder").catch((e) => toast(String(e)));
 });
+
+listen("folders-changed", (event) => renderFolders(event.payload));
 
 $("scan-btn").addEventListener("click", async () => {
   try {
