@@ -1,3 +1,8 @@
+// tauri-nspanel still relies on the deprecated `cocoa` crate and trips
+// unexpected_cfg lints through its panel_delegate! macro. That noise is in the
+// dependency, not our logic — quiet it so real warnings stay visible.
+#![allow(deprecated, unexpected_cfgs)]
+
 mod alerts;
 mod archive;
 mod cleanup;
@@ -21,6 +26,10 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, PhysicalPosition, State,
 };
+use tauri_nspanel::{
+    cocoa::appkit::NSWindowCollectionBehavior, panel_delegate, ManagerExt, WebviewWindowExt,
+};
+
 use alerts::Alerter;
 use config::Config;
 use history::Db;
@@ -202,28 +211,38 @@ fn tray_icon_image() -> tauri::image::Image<'static> {
 
 // ---------- panel ----------
 
-// App Store edition: no private API. Instead of converting the window to an
-// NSPanel (tauri-nspanel), use a plain always-on-top window and hide it when it
-// loses focus. Tradeoff vs the direct-distribution build: this popover does not
-// float over another app's fullscreen space.
 fn init_panel(app: &AppHandle) {
     let win = app.get_webview_window("popover").unwrap();
-    let _ = win.set_always_on_top(true);
+    let panel = win.to_panel().unwrap();
 
+    panel.set_level(25); // NSStatusWindowLevel
+
+    #[allow(non_upper_case_globals)]
+    const NSWindowStyleMaskNonActivatingPanel: i32 = 1 << 7;
+    panel.set_style_mask(NSWindowStyleMaskNonActivatingPanel);
+
+    panel.set_collection_behaviour(
+        NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary
+            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces,
+    );
+
+    let delegate = panel_delegate!(PopoverPanelDelegate {
+        window_did_resign_key
+    });
     let handle = app.clone();
-    win.on_window_event(move |event| {
-        if let tauri::WindowEvent::Focused(false) = event {
+    delegate.set_listener(Box::new(move |delegate_name: String| {
+        if delegate_name == "window_did_resign_key" {
             let state = handle.state::<PopoverState>();
             let mut times = state.0.lock().unwrap();
-            // Ignore the spurious blur macOS fires right after showing.
             if times.shown_at.elapsed() > Duration::from_millis(500) {
                 times.hidden_at = Instant::now();
-                if let Some(win) = handle.get_webview_window("popover") {
-                    let _ = win.hide();
+                if let Ok(panel) = handle.get_webview_panel("popover") {
+                    panel.order_out(None);
                 }
             }
         }
-    });
+    }));
+    panel.set_delegate(delegate);
 }
 
 fn show_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
@@ -249,16 +268,17 @@ fn show_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
     if let Some(state) = app.try_state::<PopoverState>() {
         state.0.lock().unwrap().shown_at = Instant::now();
     }
-    let _ = win.show();
-    let _ = win.set_focus();
-    // Let the frontend replay its entrance animation.
-    let _ = app.emit("popover-shown", ());
+    if let Ok(panel) = app.get_webview_panel("popover") {
+        panel.show();
+        // Let the frontend replay its entrance animation.
+        let _ = app.emit("popover-shown", ());
+    }
 }
 
 fn toggle_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
-    if let Some(win) = app.get_webview_window("popover") {
-        if win.is_visible().unwrap_or(false) {
-            let _ = win.hide();
+    if let Ok(panel) = app.get_webview_panel("popover") {
+        if panel.is_visible() {
+            panel.order_out(None);
             return;
         }
     }
@@ -515,6 +535,7 @@ fn spawn_poll_loop(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_nspanel::init())
         .invoke_handler(tauri::generate_handler![
             resize_popover,
             quit_app,

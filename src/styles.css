@@ -29,7 +29,9 @@
 }
 
 html, body {
-  background: transparent;
+  /* App Store edition: no vibrancy (private API), so paint a solid dark base
+     instead of letting a blur show through. */
+  background: #1c1c1e;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
@@ -41,8 +43,9 @@ html, body {
 
 .panel {
   height: 100vh;
-  /* Vibrancy shows through this tint; if effects are off it still reads dark. */
-  background: rgba(30, 30, 32, 0.55);
+  /* Solid, opaque surface — the vibrancy blur is unavailable without the
+     private API, so this is the real background rather than a tint over it. */
+  background: #1e1e20;
   border-radius: 12px;
   border: 0.5px solid rgba(255, 255, 255, 0.14);
   padding: 12px 12px 10px;
