@@ -21,6 +21,9 @@ pub struct Config {
     pub hibernation_age_days: u64,
     /// Show live text next to the tray icon.
     pub tray_live_text: bool,
+    /// App Store edition: scan only user-granted folders (security-scoped
+    /// bookmarks) and skip the home-dir conda/cache probing the sandbox forbids.
+    pub sandboxed: bool,
 }
 
 impl Default for Config {
@@ -48,6 +51,8 @@ impl Default for Config {
             disk_warn_gb: 10.0,
             hibernation_age_days: 60,
             tray_live_text: true,
+            // App Store edition default: sandboxed, folders granted by the user.
+            sandboxed: true,
         }
     }
 }

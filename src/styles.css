@@ -199,6 +199,26 @@ html, body {
 .btn.primary { background: var(--blue); }
 .btn.primary:hover { background: #2b95ff; }
 .btn.danger { background: var(--red); }
+
+/* granted-folder list (App Store edition) */
+.folders { display: flex; flex-direction: column; gap: 6px; }
+.folders-head { margin-bottom: 1px; }
+#folder-list { display: flex; flex-direction: column; gap: 4px; }
+.folder-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--fill); border-radius: 7px; padding: 5px 6px 5px 9px;
+  animation: row-in 0.42s var(--spring-soft) both;
+}
+.folder-path {
+  font-size: 12px; color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.folder-remove {
+  flex: none; width: 18px; height: 18px; border: none; border-radius: 5px;
+  background: transparent; color: var(--text-3); font-size: 15px; line-height: 1;
+  cursor: pointer; transition: background 0.12s, color 0.12s;
+}
+.folder-remove:hover { background: rgba(255, 69, 58, 0.18); color: var(--red); }
 .btn.danger:hover { background: #ff5f55; }
 .btn.mini { padding: 2px 9px; font-size: 11px; border-radius: 5px; font-weight: 560; }
 .btn:disabled { opacity: 0.4; cursor: default; }

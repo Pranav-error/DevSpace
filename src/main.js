@@ -61,6 +61,7 @@ tabButtons.forEach((btn, idx) => {
       }
     });
     resizeForTab();
+    if (btn.dataset.tab === "disk") loadFolders();
     if (btn.dataset.tab === "settings") loadSettings();
     if (btn.dataset.tab === "docker" && !dockerLoaded) refreshDocker();
   });
@@ -221,6 +222,50 @@ setInterval(refreshForecast, 10 * 60 * 1000);
 // ---------- disk tab ----------
 let lastScan = null;
 const selected = new Set();
+
+// ---------- granted folders (App Store edition) ----------
+function renderFolders(roots) {
+  const list = $("folder-list");
+  list.replaceChildren();
+  if (!roots.length) {
+    const empty = document.createElement("div");
+    empty.className = "hint";
+    empty.textContent = "No folders yet. Add the folders you want DevSpace to scan (e.g. your code or Documents folder).";
+    list.append(empty);
+  }
+  for (const path of roots) {
+    const row = document.createElement("div");
+    row.className = "folder-row";
+    const name = document.createElement("span");
+    name.className = "folder-path";
+    name.textContent = path.replace(/^\/Users\/[^/]+/, "~");
+    name.title = path;
+    const del = document.createElement("button");
+    del.className = "folder-remove";
+    del.textContent = "×";
+    del.title = "Remove";
+    del.addEventListener("click", async () => {
+      renderFolders(await invoke("remove_scan_folder", { path }));
+    });
+    row.append(name, del);
+    list.append(row);
+  }
+  resizeForTab();
+}
+
+async function loadFolders() {
+  try {
+    renderFolders(await invoke("scan_folders"));
+  } catch {}
+}
+
+$("add-folder").addEventListener("click", async () => {
+  try {
+    renderFolders(await invoke("pick_scan_folder"));
+  } catch (e) {
+    toast(String(e));
+  }
+});
 
 $("scan-btn").addEventListener("click", async () => {
   try {

@@ -399,6 +399,39 @@ fn resize_popover(app: AppHandle, height: f64) {
     }
 }
 
+/// App Store edition: let the user grant a folder to scan. The picked path
+/// becomes a scan root (persisted). Under the sandbox this is the only way in —
+/// the folder picker carries the user's access grant.
+#[tauri::command]
+fn pick_scan_folder(app: AppHandle, state: State<AppState>) -> Result<Vec<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = app.dialog().file().blocking_pick_folder();
+    if let Some(fp) = picked {
+        if let Ok(path) = fp.into_path() {
+            let path = path.to_string_lossy().into_owned();
+            let mut cfg = state.config.lock().unwrap();
+            if !cfg.scan_roots.contains(&path) {
+                cfg.scan_roots.push(path);
+                let _ = config::save(&cfg);
+            }
+        }
+    }
+    Ok(state.config.lock().unwrap().scan_roots.clone())
+}
+
+#[tauri::command]
+fn remove_scan_folder(state: State<AppState>, path: String) -> Result<Vec<String>, String> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.scan_roots.retain(|r| r != &path);
+    let _ = config::save(&cfg);
+    Ok(cfg.scan_roots.clone())
+}
+
+#[tauri::command]
+fn scan_folders(state: State<AppState>) -> Vec<String> {
+    state.config.lock().unwrap().scan_roots.clone()
+}
+
 #[tauri::command]
 fn get_config(state: State<AppState>) -> Config {
     state.config.lock().unwrap().clone()
@@ -615,9 +648,13 @@ fn spawn_poll_loop(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_nspanel::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             resize_popover,
             quit_app,
+            pick_scan_folder,
+            remove_scan_folder,
+            scan_folders,
             get_config,
             save_config,
             set_paused,

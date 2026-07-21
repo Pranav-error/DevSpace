@@ -277,6 +277,18 @@ pub fn scan<F: FnMut(&str, usize)>(cfg: &Config, mut progress: F) -> ScanResult 
         }
     }
 
+    // The blocks below reach into fixed home-dir locations, which the App
+    // Sandbox forbids — the sandboxed edition scans only user-granted roots.
+    if cfg.sandboxed {
+        findings.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        projects.sort_by(|a, b| b.days_idle.cmp(&a.days_idle));
+        return ScanResult {
+            findings,
+            projects,
+            scanned_at: now_secs(),
+        };
+    }
+
     // Conda environments outside scan roots.
     for conda_root in ["miniconda3/envs", "anaconda3/envs", ".conda/envs", "miniforge3/envs"] {
         let dir = home_dir().join(conda_root);
