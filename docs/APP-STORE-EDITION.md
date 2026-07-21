@@ -93,6 +93,43 @@ process killing, ML quantization, whole-home scanning) is *dropped* in this SKU.
 3. **Free** — Lite is a strict subset of the free open-source app; the App Store listing is purely
    for discoverability + trust. ✅
 
+## Phase 3 — sandbox build, signing & submission (reference)
+
+Entitlements live in `src-tauri/entitlements.plist` (validated). They are
+**intentionally not wired into `tauri.conf.json`** yet: enabling the sandbox
+needs a Mac App Store provisioning profile + Apple Distribution signing, and
+turning it on for an unsigned `cargo run` dev build only breaks launch.
+
+**Note on the sandbox container:** once sandboxed, `dirs::home_dir()` resolves to
+`~/Library/Containers/com.saipranav.devspace-lite/Data`, so `~/.devspace`
+(config, history db, `bookmarks.json`) transparently persists *inside* the
+container — no code change needed. Security-scoped bookmarks (`src/bookmarks.rs`)
+only actually work once this sandbox + the entitlements are active; until then
+they gracefully fall back to plain paths.
+
+Steps when ready to submit:
+1. In App Store Connect, create the app record for bundle id
+   `com.saipranav.devspace-lite`.
+2. In the Apple Developer portal, create a **Mac App Store** provisioning profile
+   for that id; download it.
+3. Certs: an **Apple Distribution** cert + a **Mac Installer Distribution** cert
+   (distinct from the Developer ID cert used for notarization).
+4. Point the bundler at the entitlements + distribution identity (either via
+   `tauri.conf.json` `bundle.macOS.entitlements` + `signingIdentity`, or sign the
+   built `.app` by hand with `codesign --entitlements entitlements.plist
+   --options runtime -s "Apple Distribution: …"`).
+5. Wrap in a `.pkg` with `productbuild --component … --sign "3rd Party Mac
+   Developer Installer: …"` (or the Mac Installer Distribution cert).
+6. Upload via **Transporter** (or `xcrun altool --upload-app`), then submit for
+   **App Review**. Privacy nutrition label = "No data collected" (everything is
+   local, nothing leaves the machine).
+
+To smoke-test the sandbox locally *before* App Store submission, sign a build
+with these entitlements using the existing **Developer ID** cert + hardened
+runtime — a Developer-ID app with `com.apple.security.app-sandbox` still runs
+sandboxed, which lets the folder-grant + bookmark round-trip be verified without
+going through App Review.
+
 ## Why direct distribution stays primary
 For a power-user dev tool, the notarized GitHub/Homebrew build is the *better* channel: no
 sandbox (keeps Docker, process control, home-wide scan, ML quantization), no review latency,

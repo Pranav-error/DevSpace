@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Store (sandboxed) edition entitlements — DevSpace Lite.
+
+  Deliberately minimal: DevSpace Lite only reads disk usage in folders the user
+  explicitly grants, and never shells out, controls other apps, or uses the
+  network. So the only entitlements needed are the sandbox itself plus
+  user-selected file access and app-scoped security-scoped bookmarks.
+
+  NOT wired into tauri.conf yet: enabling the sandbox requires a Mac App Store
+  provisioning profile + Apple Distribution signing (Phase 3). Turning it on for
+  an unsigned `cargo run` dev build would just break launch. See
+  docs/APP-STORE-EDITION.md.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- The folder picker grants read/write to whatever the user selects. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Persist those grants across launches via security-scoped bookmarks
+         (see src/bookmarks.rs). -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+</dict>
+</plist>
