@@ -5,6 +5,7 @@
 
 mod alerts;
 mod archive;
+mod bookmarks;
 mod cleanup;
 mod config;
 mod docker;
@@ -434,6 +435,9 @@ fn pick_scan_folder(app: AppHandle) {
             let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
             if !cfg.scan_roots.contains(&path) {
+                // Persist a security-scoped bookmark so this grant survives the
+                // sandbox across relaunches (no-op/graceful when unsandboxed).
+                bookmarks::save_bookmark(&path);
                 cfg.scan_roots.push(path);
                 let _ = config::save(&cfg);
             }
@@ -448,6 +452,7 @@ fn remove_scan_folder(state: State<AppState>, path: String) -> Result<Vec<String
     let mut cfg = state.config.lock().unwrap();
     cfg.scan_roots.retain(|r| r != &path);
     let _ = config::save(&cfg);
+    bookmarks::remove_bookmark(&path);
     Ok(cfg.scan_roots.clone())
 }
 
@@ -482,6 +487,9 @@ fn start_scan(app: AppHandle) -> Result<(), String> {
     let cfg = state.config.lock().unwrap().clone();
     let handle = app.clone();
     thread::spawn(move || {
+        // Acquire security-scoped access to granted folders for the duration of
+        // the scan; the guards stop access when this scope ends.
+        let _access = bookmarks::access(&cfg.scan_roots);
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             scanner::scan(&cfg, |path, visited| {
                 let _ = handle.emit("scan-progress", serde_json::json!({ "path": path, "visited": visited }));
