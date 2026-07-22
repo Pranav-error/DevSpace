@@ -407,25 +407,19 @@ fn resize_popover(app: AppHandle, height: f64) {
 /// Non-blocking: a blocking picker wedges a menu-bar app's event loop (the
 /// popover stops responding and the app can't be quit). We open the panel with
 /// a callback and push the result back to the UI via a `folders-changed` event.
-/// Bring the app frontmost so panels (like the folder picker) actually appear.
-/// A menu-bar Accessory app isn't active by default, so an async NSOpenPanel
-/// opens with nothing to raise it. Public AppKit — App Store-safe.
-#[cfg(target_os = "macos")]
-fn activate_app() {
-    use objc2::{class, msg_send, runtime::AnyObject};
-    unsafe {
-        let ns_app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
-        if !ns_app.is_null() {
-            let _: () = msg_send![&*ns_app, activateIgnoringOtherApps: true];
-        }
-    }
-}
-
 #[tauri::command]
 fn pick_scan_folder(app: AppHandle) {
     use tauri_plugin_dialog::DialogExt;
-    #[cfg(target_os = "macos")]
-    activate_app();
+    // KNOWN ISSUE (unresolved): the picker doesn't reliably surface from this
+    // app. Tried and reverted: (1) activateIgnoringOtherApps — no visible
+    // effect; (2) temporarily switching to a Regular activation policy — app
+    // became frontmost (confirmed: full menu bar appeared) but the panel still
+    // never showed; (3) set_parent(&popover) to attach as a sheet — caused the
+    // popover to flicker/close instead of presenting anything. Needs proper
+    // investigation (not more live trial-and-error) before trying again — see
+    // docs/APP-STORE-EDITION.md and memory. Left as the plain non-blocking call
+    // for now: safe (doesn't crash or disrupt the UI), just silently doesn't
+    // show a panel yet.
     let app = app.clone();
     app.clone().dialog().file().pick_folder(move |folder| {
         let Some(fp) = folder else { return };
