@@ -106,23 +106,6 @@ listen("popover-shown", () => {
   resizeForTab();
 });
 
-// WebKit's own heuristic for whether focus came from mouse vs. keyboard
-// (which drives the CSS :focus-visible ring) gets confused in this app —
-// after a plain mouse click (confirmed, not keyboard Tab navigation), a ring
-// can appear on a completely different, non-clicked tab. Rather than patch
-// each place focus can land, track mouse-vs-keyboard ourselves and kill focus
-// on anything it lands on while the mouse was the last input — regardless of
-// which element WebKit's own logic incorrectly picked. Real keyboard nav
-// (Tab key) is left alone, so accessibility still works correctly.
-let usingMouse = true;
-document.addEventListener("mousedown", () => { usingMouse = true; }, true);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Tab") usingMouse = false;
-}, true);
-document.addEventListener("focusin", (e) => {
-  if (usingMouse) e.target.blur();
-}, true);
-
 // ---------- toast & modal ----------
 let toastTimer;
 function toast(msg, ms = 3500) {
@@ -682,13 +665,21 @@ async function hibernateProject(p) {
 
 async function restoreProject(p) {
   if (sandboxed) {
-    // Running the rebuild command is forbidden under the App Sandbox — show
-    // it so the user can run it themselves instead of silently failing.
-    await confirmModal(
-      "Restore project",
-      [textDiv(`Run this yourself in a terminal, in ${p.root}:`), textDiv(p.rebuild_cmd || "(no command recorded)", "code")],
-      "Got it"
-    );
+    // Ask the backend rather than trust the frontend's cached p.rebuild_cmd
+    // (from the last scan) — it can go stale if the project changed since
+    // then. The backend reads the authoritative .devspace-hibernated.json
+    // marker on disk and, when sandboxed, returns the command instead of
+    // running it (forbidden under the App Sandbox).
+    try {
+      const res = await invoke("restore_project", { root: p.root });
+      await confirmModal(
+        "Restore project",
+        [textDiv(`Run this yourself in a terminal, in ${p.root}:`), textDiv(res.manual_command || "(no command recorded)", "code")],
+        "Got it"
+      );
+    } catch (e) {
+      toast(String(e), 6000);
+    }
     return;
   }
   if (!(await confirmModal("Restore project?", [textDiv(`Runs "${p.rebuild_cmd}" in ${p.root} — can take a few minutes.`)], "Restore"))) return;
