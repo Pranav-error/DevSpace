@@ -370,7 +370,13 @@ fn toggle_popover(app: &AppHandle, tray_rect: Option<tauri::Rect>) {
 
 /// Ask the app to quit gracefully (like ⌘Q); fall back to SIGTERM.
 #[tauri::command]
-fn quit_app(name: String, pids: Vec<u32>) -> Result<(), String> {
+fn quit_app(state: State<AppState>, name: String, pids: Vec<u32>) -> Result<(), String> {
+    // Controlling another app's process is forbidden under the App Sandbox.
+    // The UI already hides the Quit button when sandboxed; this is the
+    // defensive backstop in case it's ever reached another way.
+    if state.config.lock().unwrap().sandboxed {
+        return Err("quitting other apps isn't available in this edition".into());
+    }
     let script = format!("tell application \"{}\" to quit", name.replace('"', ""));
     let graceful = std::process::Command::new("osascript")
         .arg("-e")
@@ -529,12 +535,28 @@ fn recently_cleaned(db: State<Db>) -> Vec<history::CleanedEntry> {
 }
 
 #[tauri::command]
-async fn docker_info() -> docker::DockerInfo {
-    docker::info()
+async fn docker_info(state: State<'_, AppState>) -> Result<docker::DockerInfo, String> {
+    // Shelling out to the docker CLI is forbidden under the App Sandbox. The
+    // UI already hides the Docker tab when sandboxed; this is the defensive
+    // backstop in case it's ever reached another way.
+    if state.config.lock().unwrap().sandboxed {
+        return Ok(docker::DockerInfo {
+            available: false,
+            error: Some("Docker control isn't available in this edition".into()),
+            images: Vec::new(),
+            containers: Vec::new(),
+            volumes: Vec::new(),
+            build_cache_bytes: 0,
+        });
+    }
+    Ok(docker::info())
 }
 
 #[tauri::command]
-async fn docker_remove(kind: String, id: String) -> Result<String, String> {
+async fn docker_remove(state: State<'_, AppState>, kind: String, id: String) -> Result<String, String> {
+    if state.config.lock().unwrap().sandboxed {
+        return Err("Docker control isn't available in this edition".into());
+    }
     docker::remove(&kind, &id)
 }
 
@@ -549,7 +571,15 @@ async fn archive_move(path: String, volume: String) -> Result<archive::ArchiveOu
 }
 
 #[tauri::command]
-async fn archive_convert(path: String, mode: String) -> Result<archive::ArchiveOutcome, String> {
+async fn archive_convert(state: State<'_, AppState>, path: String, mode: String) -> Result<archive::ArchiveOutcome, String> {
+    // Shells out to a bundled/venv python for quantization — forbidden under
+    // the App Sandbox. The UI already hides the ML tab when sandboxed; this
+    // is the defensive backstop in case it's ever reached another way.
+    // (archive_move is pure filesystem ops — no forbidden syscall, no gate
+    // needed — but its UI is hidden along with the rest of the ML tab too.)
+    if state.config.lock().unwrap().sandboxed {
+        return Err("checkpoint quantization isn't available in this edition".into());
+    }
     archive::convert(&path, &mode)
 }
 
