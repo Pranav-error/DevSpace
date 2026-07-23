@@ -25,6 +25,9 @@ globset = "0.4"
 # directly (not via tauri-plugin-dialog's async wrapper) — see the comment on
 # pick_scan_folder in lib.rs for why.
 rfd = "0.16"
+# Sandbox-safe notifications (UserNotifications), replacing the osascript
+# shell-out — see alerts.rs.
+tauri-plugin-notification = "2"
 # Persist security-scoped bookmarks (base64 in a small json store).
 base64 = "0.21"
 

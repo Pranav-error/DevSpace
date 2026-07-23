@@ -686,6 +686,7 @@ fn spawn_poll_loop(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_nspanel::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             resize_popover,
             quit_app,
