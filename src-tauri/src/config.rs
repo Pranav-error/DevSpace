@@ -86,3 +86,65 @@ pub fn save(cfg: &Config) -> Result<(), String> {
     let text = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     fs::write(config_path(), text).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn default_is_sandboxed() {
+        // The App Store edition must default to sandboxed — Phase 1/2 gating
+        // throughout the app (scanner, Docker/ML UI, restore_project, quit_app)
+        // all key off this.
+        assert!(Config::default().sandboxed);
+    }
+
+    #[test]
+    fn default_has_expected_thresholds() {
+        let cfg = Config::default();
+        assert_eq!(cfg.mem_warn_pct, 85.0);
+        assert_eq!(cfg.disk_warn_gb, 10.0);
+        assert_eq!(cfg.hibernation_age_days, 60);
+        assert!(cfg.tray_live_text);
+        assert!(cfg.never_touch.is_empty());
+        assert!(cfg
+            .ignore_patterns
+            .iter()
+            .any(|p| p == "**/Library/**"));
+    }
+
+    #[test]
+    fn deserializing_json_missing_sandboxed_field_defaults_to_true() {
+        // Real-world regression case hit this session: a config.json written
+        // before the `sandboxed` field existed. #[serde(default)] on the
+        // struct must fill it in from Config::default() (true), not false or
+        // a deserialize error, or every pre-existing install would silently
+        // un-sandbox itself.
+        let stale_json = r#"{
+            "scan_roots": ["/Users/x/Documents/GitHub/a"],
+            "ignore_patterns": ["**/Library/**"],
+            "never_touch": [],
+            "poll_interval_secs": 3,
+            "mem_warn_pct": 70.0,
+            "disk_warn_gb": 10.0,
+            "hibernation_age_days": 60,
+            "tray_live_text": true
+        }"#;
+        let cfg: Config = serde_json::from_str(stale_json).unwrap();
+        assert!(cfg.sandboxed, "missing field must default to true, not false");
+        assert_eq!(cfg.mem_warn_pct, 70.0, "present fields must be preserved, not overwritten by defaults");
+        assert_eq!(cfg.scan_roots, vec!["/Users/x/Documents/GitHub/a"]);
+    }
+
+    #[test]
+    fn round_trips_through_json() {
+        let mut cfg = Config::default();
+        cfg.scan_roots.push("/tmp/somewhere".into());
+        cfg.mem_warn_pct = 72.5;
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.scan_roots, cfg.scan_roots);
+        assert_eq!(back.mem_warn_pct, 72.5);
+        assert_eq!(back.sandboxed, cfg.sandboxed);
+    }
+}

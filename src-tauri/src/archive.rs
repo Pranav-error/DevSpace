@@ -68,7 +68,7 @@ def main():
 main()
 "#;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ArchiveOutcome {
     pub ok: bool,
     pub message: String,
@@ -168,5 +168,83 @@ pub fn convert(path: &str, mode: &str) -> Result<ArchiveOutcome, String> {
         })
     } else {
         Err(parsed["error"].as_str().unwrap_or("unknown error").to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("devspace-archive-test-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn convert_rejects_unknown_mode_without_touching_python() {
+        // Validated before the python helper is ever written/spawned — should
+        // error immediately regardless of whether python/torch are installed.
+        let err = convert("/tmp/whatever.pt", "int4").unwrap_err();
+        assert!(err.contains("unknown mode"));
+    }
+
+    #[test]
+    fn move_and_symlink_rejects_non_file_source() {
+        let dir = scratch_dir("non-file");
+        let err = move_and_symlink(&dir.to_string_lossy(), "/tmp").unwrap_err();
+        assert!(err.contains("not a file"));
+    }
+
+    #[test]
+    fn move_and_symlink_rejects_already_symlinked_source() {
+        let dir = scratch_dir("already-symlink");
+        let real = dir.join("real.pt");
+        fs::write(&real, b"data").unwrap();
+        let link = dir.join("checkpoint.pt");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let err = move_and_symlink(&link.to_string_lossy(), "/tmp").unwrap_err();
+        assert!(err.contains("already a symlink"));
+    }
+
+    #[test]
+    fn move_and_symlink_moves_file_and_leaves_a_working_symlink() {
+        let source_dir = scratch_dir("move-source");
+        let volume_dir = scratch_dir("move-volume");
+        let checkpoint = source_dir.join("model.safetensors");
+        let payload = vec![7u8; 4096];
+        fs::write(&checkpoint, &payload).unwrap();
+
+        let outcome = move_and_symlink(&checkpoint.to_string_lossy(), &volume_dir.to_string_lossy()).unwrap();
+
+        assert!(outcome.ok);
+        assert_eq!(outcome.before_bytes, 4096);
+        assert_eq!(outcome.after_bytes, 4096);
+        assert!(checkpoint.is_symlink(), "original path must become a symlink");
+        assert_eq!(
+            fs::read(&checkpoint).unwrap(),
+            payload,
+            "reading through the symlink must still return the original content"
+        );
+        let archived = volume_dir.join("DevSpaceArchive").join("model.safetensors");
+        assert!(archived.is_file(), "the real file must now live under DevSpaceArchive on the volume");
+    }
+
+    #[test]
+    fn move_and_symlink_refuses_to_overwrite_existing_dest() {
+        let source_dir = scratch_dir("dup-source");
+        let volume_dir = scratch_dir("dup-volume");
+        let checkpoint = source_dir.join("model.pt");
+        fs::write(&checkpoint, b"data").unwrap();
+        let archive_subdir = volume_dir.join("DevSpaceArchive");
+        fs::create_dir_all(&archive_subdir).unwrap();
+        fs::write(archive_subdir.join("model.pt"), b"already here").unwrap();
+
+        let err = move_and_symlink(&checkpoint.to_string_lossy(), &volume_dir.to_string_lossy()).unwrap_err();
+        assert!(err.contains("already exists"));
+        assert!(checkpoint.is_file(), "original must be untouched when the dest collides");
+        assert!(!checkpoint.is_symlink());
     }
 }

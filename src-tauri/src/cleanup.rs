@@ -37,6 +37,72 @@ pub fn clean_paths(cfg: &Config, db: &Db, paths: &[String]) -> CleanOutcome {
     outcome
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    fn test_db() -> Db {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE cleaned (ts INTEGER NOT NULL, path TEXT NOT NULL, size_bytes INTEGER NOT NULL);",
+        )
+        .unwrap();
+        Db(Mutex::new(conn))
+    }
+
+    fn scratch_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("devspace-cleanup-test-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn never_touch_paths_are_skipped_and_not_deleted() {
+        let dir = scratch_dir("never-touch");
+        let precious = dir.join("precious.txt");
+        fs::write(&precious, b"do not delete me").unwrap();
+        let cfg = Config { never_touch: vec![dir.to_string_lossy().into_owned()], ..Default::default() };
+        let db = test_db();
+
+        let outcome = clean_paths(&cfg, &db, &[precious.to_string_lossy().into_owned()]);
+
+        assert!(outcome.moved.is_empty());
+        assert_eq!(outcome.errors.len(), 1);
+        assert!(outcome.errors[0].contains("never-touch list"));
+        assert!(precious.exists(), "never-touch path must not be trashed");
+    }
+
+    #[test]
+    fn missing_path_reports_an_error_not_a_panic() {
+        let cfg = Config::default();
+        let db = test_db();
+        let outcome = clean_paths(&cfg, &db, &["/nonexistent/devspace-test-path-xyz".into()]);
+        assert!(outcome.moved.is_empty());
+        assert_eq!(outcome.errors.len(), 1);
+        assert!(outcome.errors[0].contains("no longer exists"));
+    }
+
+    #[test]
+    fn successfully_trashed_paths_are_logged_and_totaled() {
+        let dir = scratch_dir("trash-me");
+        let junk = dir.join("junk.txt");
+        fs::write(&junk, vec![0u8; 1024]).unwrap();
+        let cfg = Config::default();
+        let db = test_db();
+
+        let outcome = clean_paths(&cfg, &db, &[junk.to_string_lossy().into_owned()]);
+
+        assert_eq!(outcome.errors.len(), 0);
+        assert_eq!(outcome.moved.len(), 1);
+        assert_eq!(outcome.total_bytes, 1024);
+        assert!(!junk.exists(), "trashed file should no longer be at its original path");
+        assert_eq!(db.recently_cleaned().len(), 1, "trash success must be logged to history");
+    }
+}
+
 #[derive(Serialize)]
 pub struct HibernateOutcome {
     pub cleaned_bytes: u64,
