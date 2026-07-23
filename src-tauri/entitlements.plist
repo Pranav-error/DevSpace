@@ -49,5 +49,15 @@
          network. -->
     <key>com.apple.security.network.client</key>
     <true/>
+
+    <!-- Xcode auto-injects this from the provisioning profile when it signs;
+         plain `codesign` on the CLI does not, leaving it out of the signed
+         binary's actual entitlements even though the provisioning profile has
+         it — Transporter flagged this as blocking TestFlight eligibility.
+         Same value for both this bundle id's signing paths (Developer ID
+         smoke test and Apple Distribution App Store build): team J73FA7VZPP,
+         bundle com.saipranav.devspace-lite. -->
+    <key>com.apple.application-identifier</key>
+    <string>J73FA7VZPP.com.saipranav.devspace-lite</string>
 </dict>
 </plist>
