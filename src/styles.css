@@ -107,6 +107,13 @@ html, body {
 .tab {
   flex: 1;
   border: none;
+  /* Without this, WebKit can paint its own NATIVE focus ring as part of the
+     <button>'s native control appearance — entirely separate from, and
+     unaffected by, the CSS `outline` property. That's the real reason no
+     amount of outline:none / JS blur() could suppress the stray ring: none of
+     it was ever a CSS-drawn outline in the first place. */
+  appearance: none;
+  -webkit-appearance: none;
   background: transparent;
   color: var(--text-2);
   font-family: inherit;
@@ -122,8 +129,15 @@ html, body {
 .tab:active { transform: scale(0.95); }
 /* Kill WebKit's blue focus ring on mouse clicks; keep a subtle one for
    keyboard navigation only. */
-.tab:focus, .btn:focus { outline: none; }
-.tab:focus-visible, .btn:focus-visible { outline: 2px solid rgba(10, 132, 255, 0.6); outline-offset: 1px; }
+.btn:focus { outline: none; }
+.btn:focus-visible { outline: 2px solid rgba(10, 132, 255, 0.6); outline-offset: 1px; }
+/* Tabs never show a focus ring, full stop. WebKit's focus-visible heuristic
+   (and/or native AppKit focus-restoration when this NSPanel-based popover is
+   hidden and reshown) can paint a ring on a stale, non-active tab regardless
+   of JS-level blur() calls in show/click handlers — this is the only reliably
+   correct fix. Tab selection is fully mouse-driven here and shown via the
+   .active class + sliding indicator, so no accessibility is lost. */
+.tab:focus, .tab:focus-visible { outline: none; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--text); font-weight: 590; }
 

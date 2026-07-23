@@ -46,13 +46,15 @@ function moveTabIndicator(btn) {
 }
 let activeTabIndex = 0;
 tabButtons.forEach((btn, idx) => {
+  // Prevent focus from ever being assigned in the first place on mouse click
+  // — every earlier attempt (CSS outline:none, -webkit-appearance:none, blur()
+  // after the fact) reacted to focus that had already landed, and none of
+  // them stopped the ring. This is a fundamentally earlier intervention point:
+  // preventDefault() on mousedown blocks the browser's default click-to-focus
+  // behavior outright, so the button never becomes focused via mouse at all
+  // (the subsequent click event still fires normally).
+  btn.addEventListener("mousedown", (e) => e.preventDefault());
   btn.addEventListener("click", () => {
-    // Focus can return to the webview from an external dialog (e.g. the
-    // native folder picker) after the active tab has changed, and WebKit's
-    // focus-visible heuristic can then show a ring on whichever tab still
-    // holds DOM focus — not necessarily the active one. Tab selection is
-    // driven entirely by the .active class, not focus, so just clear it.
-    tabButtons.forEach((b) => b.blur());
     const dir = idx > activeTabIndex ? "enter-right" : "enter-left";
     activeTabIndex = idx;
     tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
@@ -76,6 +78,12 @@ requestAnimationFrame(() => moveTabIndicator(tabButtons[0]));
 
 // Replay the panel entrance spring every time the popover opens.
 listen("popover-shown", () => {
+  // Whichever button was focused before the popover was hidden stays the
+  // DOM's activeElement the whole time it's invisible. When it reappears,
+  // WebKit can then apply a focus-visible ring to that stale target — the
+  // reproducible case: click something, close the popover, reopen it, and a
+  // ring appears on an unrelated tab. Clear focus right as it shows.
+  document.activeElement?.blur();
   const panel = document.querySelector(".panel");
   panel.classList.remove("opening");
   void panel.offsetWidth;
@@ -84,11 +92,22 @@ listen("popover-shown", () => {
   resizeForTab();
 });
 
-// Focus can return here from an external native dialog (e.g. the folder
-// picker) with a stray focus-visible ring on whichever tab last held DOM
-// focus, regardless of which tab is actually active. Tab selection is driven
-// by the .active class, not focus, so clear it whenever the window refocuses.
-window.addEventListener("focus", () => tabButtons.forEach((b) => b.blur()));
+// WebKit's own heuristic for whether focus came from mouse vs. keyboard
+// (which drives the CSS :focus-visible ring) gets confused in this app —
+// after a plain mouse click (confirmed, not keyboard Tab navigation), a ring
+// can appear on a completely different, non-clicked tab. Rather than patch
+// each place focus can land, track mouse-vs-keyboard ourselves and kill focus
+// on anything it lands on while the mouse was the last input — regardless of
+// which element WebKit's own logic incorrectly picked. Real keyboard nav
+// (Tab key) is left alone, so accessibility still works correctly.
+let usingMouse = true;
+document.addEventListener("mousedown", () => { usingMouse = true; }, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") usingMouse = false;
+}, true);
+document.addEventListener("focusin", (e) => {
+  if (usingMouse) e.target.blur();
+}, true);
 
 // ---------- toast & modal ----------
 let toastTimer;
