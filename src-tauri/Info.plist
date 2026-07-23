@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated Info.plist by Tauri automatically (it looks for a
+  file named exactly "Info.plist" next to tauri.conf.json). Only keys not
+  otherwise expressible via tauri.conf.json belong here.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Menu-bar-only app, no Dock icon. lib.rs also sets this at runtime
+         (ActivationPolicy::Accessory) so it can be temporarily switched to
+         Regular while the folder picker is open, but the declarative key
+         here is what the App Store review process expects and avoids a
+         Dock-icon flash at launch before the Rust setup code runs. -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- Export compliance: DevSpace makes no network calls and does no
+         encryption of its own (only local disk reads and the OS's own TLS
+         for things like the OS-level notification/update plumbing, which
+         are exempt). Declaring this avoids an extra manual prompt during
+         App Store Connect submission. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+</dict>
+</plist>
