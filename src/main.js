@@ -194,6 +194,14 @@ function renderStats(s) {
     ? `⚠ Memory above your ${memWarnPct}% warning threshold`
     : "";
 
+  // The App Sandbox blocks reading other processes' memory usage entirely —
+  // no entitlement exists for third-party apps to bypass this (an intentional
+  // privacy restriction), so the list is permanently empty in this edition.
+  if (sandboxed && !s.top_processes.length) {
+    $("proc-list").replaceChildren(
+      textDiv("Per-app breakdown isn't available in this edition — the App Sandbox restricts reading other processes.", "hint")
+    );
+  } else {
   $("proc-list").replaceChildren(
     ...s.top_processes.slice(0, memExpanded ? 20 : 5).map((p) => {
       const li = document.createElement("li");
@@ -237,6 +245,7 @@ function renderStats(s) {
       return li;
     })
   );
+  }
 
   const usedPct = s.disk_total_bytes
     ? ((s.disk_total_bytes - s.disk_free_bytes) / s.disk_total_bytes) * 100
@@ -250,8 +259,10 @@ function renderStats(s) {
 
   // The window may have been measured while the process list was still empty
   // (stats arrive a beat after launch). Re-fit once it's populated so the
-  // Monitor tab never opens truncated.
-  if (!statsFitDone && s.top_processes.length) {
+  // Monitor tab never opens truncated. Sandboxed builds never populate a
+  // process list at all (App Sandbox restriction, handled above) — the first
+  // real stats tick is still the right moment to re-fit there too.
+  if (!statsFitDone && (s.top_processes.length || sandboxed)) {
     statsFitDone = true;
     if (document.querySelector(".tab-pane.active")?.id === "pane-monitor") resizeForTab();
   }

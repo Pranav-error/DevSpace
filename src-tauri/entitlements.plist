@@ -26,5 +26,28 @@
          (see src/bookmarks.rs). -->
     <key>com.apple.security.files.bookmarks.app-scope</key>
     <true/>
+
+    <!-- Required for the embedded WKWebView (Tauri's UI layer) to render at
+         all under Hardened Runtime — without these, WebKit's JavaScriptCore
+         JIT is blocked and the WebContent renderer process crash-loops,
+         producing a blank window. Standard entitlements for any app embedding
+         WebKit/JavaScriptCore under hardened runtime (same set Xcode's own
+         WKWebView app template includes). -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Even though DevSpace never makes network calls, WKWebView's internal
+         Networking XPC process still needs outgoing-connection entitlement to
+         initialize under the sandbox — without it, the WebContent renderer
+         fails to launch entirely (crash, "Invalid connection identifier"),
+         producing a blank window. Documented, common gotcha for any sandboxed
+         app hosting WKWebView, regardless of whether the app itself uses the
+         network. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
 </dict>
 </plist>
