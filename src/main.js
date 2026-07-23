@@ -259,7 +259,13 @@ function renderFolders(roots) {
     row.className = "folder-row";
     const name = document.createElement("span");
     name.className = "folder-path";
-    name.textContent = path.replace(/^\/Users\/[^/]+/, "~");
+    // The container uses direction:rtl so long paths ellipsize from the left
+    // (showing the tail, not the head). A leading "~" is a weak/neutral bidi
+    // character, so in that RTL context the browser can visually shove it to
+    // the other end of the text (rendering as "…saas/~" instead of "~/…saas").
+    // A leading left-to-right mark (U+200E) anchors the run as LTR so it
+    // renders in the actual character order.
+    name.textContent = "‎" + path.replace(/^\/Users\/[^/]+/, "~");
     name.title = path;
     const del = document.createElement("button");
     del.className = "folder-remove";
