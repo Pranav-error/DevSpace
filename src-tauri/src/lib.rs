@@ -404,26 +404,37 @@ fn resize_popover(app: AppHandle, height: f64) {
 /// becomes a scan root (persisted). Under the sandbox this is the only way in —
 /// the folder picker carries the user's access grant.
 ///
-/// Non-blocking: a blocking picker wedges a menu-bar app's event loop (the
-/// popover stops responding and the app can't be quit). We open the panel with
-/// a callback and push the result back to the UI via a `folders-changed` event.
+/// ROOT CAUSE FOUND (2026-07-23) for why tauri-plugin-dialog's async
+/// `pick_folder` never surfaced anything: reading rfd 0.16.0's macOS backend
+/// (`ModalFuture::new` in backend/macos/modal_future.rs) shows that with no
+/// explicit parent it falls back to `app.mainWindow()`, and — critically — our
+/// popover is an `NSWindowStyleMaskNonActivatingPanel`, which by AppKit design
+/// can *never* become the key/main window. So `mainWindow()` is always `None`,
+/// and it falls back further to `app.windows().firstObject()` — our own
+/// popover panel — then tries to attach the picker to it as a *sheet*
+/// (`beginSheetModalForWindow:completionHandler:`). A NonActivatingPanel is not
+/// a valid sheet host, so the sheet silently fails to attach and its completion
+/// handler never fires — matching exactly what tracing showed (callback never
+/// ran, ~20 clicks piling up dead panels).
+///
+/// The fix: skip tauri-plugin-dialog's async wrapper and call `rfd` directly
+/// with its plain **synchronous** `pick_folder()`, which — with no parent set —
+/// skips the sheet-seeking logic entirely and just calls the standard
+/// `NSSavePanel.runModal()`, the same call virtually every macOS app uses; it
+/// needs no window at all. The original attempt at this (via
+/// `blocking_pick_folder`) appeared to hang the app, but that wasn't this bug —
+/// it was calling the blocking picker *directly inside the Tauri command
+/// handler*, nesting a modal run loop inside Tauri's own IPC dispatch. Calling
+/// it from a plain background thread instead avoids that: rfd's sync path
+/// internally round-trips to the main thread via a plain GCD dispatch
+/// (`dispatch2::run_on_main`) from a clean top-level context, blocking only
+/// that background thread — never the Tauri command handler or the UI.
 #[tauri::command]
 fn pick_scan_folder(app: AppHandle) {
-    use tauri_plugin_dialog::DialogExt;
-    // KNOWN ISSUE (unresolved): the picker doesn't reliably surface from this
-    // app. Tried and reverted: (1) activateIgnoringOtherApps — no visible
-    // effect; (2) temporarily switching to a Regular activation policy — app
-    // became frontmost (confirmed: full menu bar appeared) but the panel still
-    // never showed; (3) set_parent(&popover) to attach as a sheet — caused the
-    // popover to flicker/close instead of presenting anything. Needs proper
-    // investigation (not more live trial-and-error) before trying again — see
-    // docs/APP-STORE-EDITION.md and memory. Left as the plain non-blocking call
-    // for now: safe (doesn't crash or disrupt the UI), just silently doesn't
-    // show a panel yet.
-    let app = app.clone();
-    app.clone().dialog().file().pick_folder(move |folder| {
-        let Some(fp) = folder else { return };
-        let Ok(path) = fp.into_path() else { return };
+    std::thread::spawn(move || {
+        let Some(path) = rfd::FileDialog::new().pick_folder() else {
+            return; // user cancelled
+        };
         let path = path.to_string_lossy().into_owned();
         let roots = {
             let state = app.state::<AppState>();
@@ -674,7 +685,6 @@ fn spawn_poll_loop(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_nspanel::init())
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             resize_popover,
             quit_app,

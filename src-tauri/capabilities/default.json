@@ -5,7 +5,6 @@
   "windows": ["popover"],
   "permissions": [
     "core:default",
-    "core:window:allow-hide",
-    "dialog:allow-open"
+    "core:window:allow-hide"
   ]
 }

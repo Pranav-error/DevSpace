@@ -47,6 +47,12 @@ function moveTabIndicator(btn) {
 let activeTabIndex = 0;
 tabButtons.forEach((btn, idx) => {
   btn.addEventListener("click", () => {
+    // Focus can return to the webview from an external dialog (e.g. the
+    // native folder picker) after the active tab has changed, and WebKit's
+    // focus-visible heuristic can then show a ring on whichever tab still
+    // holds DOM focus — not necessarily the active one. Tab selection is
+    // driven entirely by the .active class, not focus, so just clear it.
+    tabButtons.forEach((b) => b.blur());
     const dir = idx > activeTabIndex ? "enter-right" : "enter-left";
     activeTabIndex = idx;
     tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
@@ -77,6 +83,12 @@ listen("popover-shown", () => {
   moveTabIndicator(tabButtons[activeTabIndex]);
   resizeForTab();
 });
+
+// Focus can return here from an external native dialog (e.g. the folder
+// picker) with a stray focus-visible ring on whichever tab last held DOM
+// focus, regardless of which tab is actually active. Tab selection is driven
+// by the .active class, not focus, so clear it whenever the window refocuses.
+window.addEventListener("focus", () => tabButtons.forEach((b) => b.blur()));
 
 // ---------- toast & modal ----------
 let toastTimer;

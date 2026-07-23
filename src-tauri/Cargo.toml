@@ -21,8 +21,10 @@ walkdir = "2"
 trash = "5"
 rusqlite = { version = "0.32", features = ["bundled"] }
 globset = "0.4"
-# Folder picker for the App Store edition's user-granted scan roots.
-tauri-plugin-dialog = "2"
+# Folder picker for the App Store edition's user-granted scan roots. Called
+# directly (not via tauri-plugin-dialog's async wrapper) — see the comment on
+# pick_scan_folder in lib.rs for why.
+rfd = "0.16"
 # Persist security-scoped bookmarks (base64 in a small json store).
 base64 = "0.21"
 
