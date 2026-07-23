@@ -11,12 +11,26 @@ const $ = (id) => document.getElementById(id);
 
 // Thresholds come from settings; refreshed after every save.
 let memWarnPct = 85;
+// App Store (sandboxed) edition: Docker control, process-kill, and ML
+// archiving all shell out to external processes the App Sandbox forbids.
+// Hide them rather than ship UI that would just fail at runtime.
+let sandboxed = false;
 async function refreshThresholds() {
   try {
-    memWarnPct = (await invoke("get_config")).mem_warn_pct;
+    const cfg = await invoke("get_config");
+    memWarnPct = cfg.mem_warn_pct;
+    sandboxed = cfg.sandboxed;
+    if (sandboxed) applySandboxUI();
   } catch {}
 }
 refreshThresholds();
+
+function applySandboxUI() {
+  for (const tab of ["docker", "models"]) {
+    document.querySelector(`.tab[data-tab="${tab}"]`)?.remove();
+    document.getElementById(`pane-${tab}`)?.remove();
+  }
+}
 
 // ---------- tabs ----------
 // Popovers size to their content, like native macOS menus: measure the
@@ -199,7 +213,8 @@ function renderStats(s) {
         : 0;
       const mem = textDiv(`${fmt(p.memory_bytes)} · ${ramPct}%`, "proc-mem");
       li.append(info, mem);
-      if (p.is_app) {
+      // Killing another app's process is forbidden under the App Sandbox.
+      if (p.is_app && !sandboxed) {
         const quit = document.createElement("button");
         quit.className = "btn mini quit";
         quit.textContent = "Quit";
@@ -342,6 +357,7 @@ listen("scan-done", (event) => {
 $("models-scan").addEventListener("click", () => $("scan-btn").click());
 
 function renderModels() {
+  if (sandboxed) return; // pane removed by applySandboxUI
   const box = $("models-list");
   if (!lastScan) return;
   const checkpoints = lastScan.findings.filter(
@@ -670,6 +686,7 @@ async function restoreProject(p) {
 // ---------- docker tab (v4) ----------
 let dockerLoaded = false;
 async function refreshDocker() {
+  if (sandboxed) return; // pane removed by applySandboxUI
   $("docker-status").textContent = "loading…";
   const info = await invoke("docker_info").catch(() => null);
   dockerLoaded = true;
