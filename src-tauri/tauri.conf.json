@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "DeveloperTool",
     "macOS": {
       "signingIdentity": "Developer ID Application: MYSTARTUPWAVE PRIVATE LIMITED (J73FA7VZPP)"
     },
