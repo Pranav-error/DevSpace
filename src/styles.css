@@ -157,6 +157,16 @@ html, body {
 #mem-chevron.open { transform: rotate(90deg); }
 .value { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .hint { font-size: 11px; color: var(--text-3); line-height: 1.45; }
+.code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  background: var(--fill);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 6px;
+  word-break: break-all;
+  user-select: text;
+}
 .warn-text { color: var(--yellow); font-weight: 600; }
 .footer { margin-top: auto; font-size: 11px; color: var(--text-3); text-align: center; padding-top: 4px; }
 

@@ -670,6 +670,16 @@ async function hibernateProject(p) {
 }
 
 async function restoreProject(p) {
+  if (sandboxed) {
+    // Running the rebuild command is forbidden under the App Sandbox — show
+    // it so the user can run it themselves instead of silently failing.
+    await confirmModal(
+      "Restore project",
+      [textDiv(`Run this yourself in a terminal, in ${p.root}:`), textDiv(p.rebuild_cmd || "(no command recorded)", "code")],
+      "Got it"
+    );
+    return;
+  }
   if (!(await confirmModal("Restore project?", [textDiv(`Runs "${p.rebuild_cmd}" in ${p.root} — can take a few minutes.`)], "Restore"))) return;
   toast("Restoring… running rebuild command", 10000);
   try {

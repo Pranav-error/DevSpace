@@ -88,10 +88,17 @@ pub fn hibernate_project(
 pub struct RestoreOutcome {
     pub success: bool,
     pub output: String,
+    /// Set instead of running anything when sandboxed — shelling out to run
+    /// the rebuild command is forbidden under the App Sandbox. The frontend
+    /// shows this so the user can run it themselves.
+    pub manual_command: Option<String>,
 }
 
 /// Run the recorded rebuild command in the project and remove the marker.
-pub fn restore_project(project_root: &str) -> Result<RestoreOutcome, String> {
+/// Under the App Sandbox (`sandboxed: true`), shelling out to run it is
+/// forbidden — the recorded command is returned instead of executed, and the
+/// marker is left in place until the user restores it manually and re-scans.
+pub fn restore_project(project_root: &str, sandboxed: bool) -> Result<RestoreOutcome, String> {
     let root = Path::new(project_root);
     let marker = root.join(".devspace-hibernated.json");
     let record: serde_json::Value = serde_json::from_str(
@@ -102,6 +109,14 @@ pub fn restore_project(project_root: &str) -> Result<RestoreOutcome, String> {
         .as_str()
         .ok_or("no rebuild command recorded — restore manually")?
         .to_string();
+
+    if sandboxed {
+        return Ok(RestoreOutcome {
+            success: false,
+            output: String::new(),
+            manual_command: Some(cmd),
+        });
+    }
 
     let out = Command::new("/bin/zsh")
         .arg("-lc")
@@ -117,5 +132,6 @@ pub fn restore_project(project_root: &str) -> Result<RestoreOutcome, String> {
     Ok(RestoreOutcome {
         success: out.status.success(),
         output: text.chars().rev().take(4000).collect::<String>().chars().rev().collect(),
+        manual_command: None,
     })
 }

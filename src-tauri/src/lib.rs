@@ -575,8 +575,9 @@ fn hibernate_project(app: AppHandle, root: String) -> Result<cleanup::HibernateO
 }
 
 #[tauri::command]
-async fn restore_project(root: String) -> Result<cleanup::RestoreOutcome, String> {
-    cleanup::restore_project(&root)
+async fn restore_project(app: AppHandle, root: String) -> Result<cleanup::RestoreOutcome, String> {
+    let sandboxed = app.state::<AppState>().config.lock().unwrap().sandboxed;
+    cleanup::restore_project(&root, sandboxed)
 }
 
 #[tauri::command]
